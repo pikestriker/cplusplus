@@ -18,6 +18,7 @@
     <None Include="uniform.fs" />
     <None Include="passcolor.fs" />
     <None Include="Passthrough.vs" />
+    <None Include="texture.fs" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -29,9 +30,15 @@
     <ClCompile Include="glad.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="stub_image.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="shader.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="stub_image.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
