@@ -54,8 +54,10 @@ struct wallType
 
 struct sectorType
 {
-    std::list<wallType*> walls;
+    std::list<wallType> walls;
     float distance;
+    int topColor;
+    int bottomColor;
 };
 
 int lastTickCount, startTime;
@@ -65,6 +67,7 @@ mathType math;
 playerType player;
 keyType keys;
 std::list<wallType*> walls;
+std::list<sectorType> sectors;
 
 float distance(int x1, int y1, int x2, int y2)
 {
@@ -75,6 +78,122 @@ float distance(int x1, int y1, int x2, int y2)
 bool compareWallDist(const wallType* first, const wallType* second)
 {
     return (first->distance > second->distance);
+}
+
+void loadWallsv2()
+{
+    //The format of the file is
+    //version of the file (this is to load version 2)
+    //number of sectors
+    //number of walls
+    //color of the top and color of the bottom
+    //color of the wall
+    //x y z verts of each wall
+    //repeat of everything
+    sectors.clear();
+
+    std::ifstream wallFile;
+    std::string line;
+    int vertCount = 0;
+    int compCount = 0;
+    bool colorExpected = true;
+    bool firstThrough = true;
+    bool numSectorsExp = true;
+    bool numWallsExpected = true;
+    int topColorExpected = true;
+    int bottomColorExpected = true;
+    int numSectors;
+    int numWalls;
+    int sectorCount;
+    int wallCount;
+    sectorType curSector;
+    wallType curWall;
+    int temp;
+    wallFile.open("wallsv2.txt");
+
+    if (wallFile.is_open())
+    {
+        while (wallFile.good())
+        {
+            wallFile >> temp;
+            if (firstThrough)
+            {
+                //should be the version 2 of this file
+                if (temp != 2)
+                {
+                    std::cout << "File version " << temp << " is incorrect, expecting version 2" << std::endl;
+                    wallFile.close();
+                    return;
+                }
+                firstThrough = false;
+            }
+            else if (numSectorsExp)
+            {
+                numSectors = temp;
+                sectorCount = 0;
+                numSectorsExp = false;
+            }
+            else if (numWallsExpected)
+            {
+                numWalls = temp;
+                wallCount = 0;
+                numWallsExpected = false;
+            }
+            else if (topColorExpected)
+            {
+                curSector.topColor = temp;
+                topColorExpected = false;
+            }
+            else if (bottomColorExpected)
+            {
+                curSector.bottomColor = temp;
+                bottomColorExpected = false;
+            }
+            else if (colorExpected)
+            {
+                curWall.color = temp;
+                colorExpected = false;
+            }
+            else
+            {
+                compCount++;
+
+                switch (compCount)
+                {
+                case 1:
+                    curWall.verts[vertCount].x = temp;
+                    break;
+                case 2:
+                    curWall.verts[vertCount].y = temp;
+                    break;
+                case 3:
+                    curWall.verts[vertCount].z = temp;
+                    vertCount++;
+                    compCount = 0;
+
+                    if (vertCount == 4)
+                    {
+                        vertCount = 0;
+                        colorExpected = true;
+                        curSector.walls.push_back(curWall);
+                        wallCount++;
+                        if (wallCount >= numWalls)
+                        {
+                            numWallsExpected = true;
+                            topColorExpected = true;
+                            bottomColorExpected = true;
+                            sectorCount++;
+                            sectors.push_back(curSector);
+                            curSector.walls.clear();
+                        }
+                    }
+
+                    break;
+                }
+            }
+        }
+        wallFile.close();
+    }
 }
 
 void loadWalls()
@@ -176,6 +295,7 @@ void Init_OpenGL()
     player.l = 0;
 
     loadWalls();
+    loadWallsv2();
 }
 
 void movePlayer()
