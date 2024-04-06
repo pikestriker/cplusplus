@@ -76,9 +76,9 @@ float distance(int x1, int y1, int x2, int y2)
 }
 
 //to sort the list of walls
-bool compareWallDist(const wallType* first, const wallType* second)
+bool compareWallDist(const wallType& first, const wallType& second)
 {
-    return (first->distance > second->distance);
+    return (first.distance > second.distance);
 }
 
 bool compareSectorDist(const sectorType& first, const sectorType& second)
@@ -464,11 +464,15 @@ void draw3D2()
 
     for (auto & curSector : sectors)
     {
+        //real strange issue here, had to sort the walls or we would get this distored look with the further walls drawing on top of the
+        //forefront walls.  This only started happening after adding in the ability to draw the backs of the walls
+        curSector.walls.sort(compareWallDist);
         wallSum = 0.0f;
         for (auto& curWall : curSector.walls)
         {
             for (int j = 0; j < 2; j++)     //looping through to draw the back side of the walls
             {
+
                 for (int i = 0; i < 4; i++)
                 {
                     x[i] = curWall.verts[i].x - player.x;
@@ -490,6 +494,7 @@ void draw3D2()
                     temp = y[3];
                     y[3] = y[2];
                     y[2] = temp;
+
                 }
 
                 for (int i = 0; i < 4; i++)
