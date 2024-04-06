@@ -56,6 +56,7 @@ struct sectorType
 {
     std::list<wallType> walls;
     float distance;
+    int numWalls;
     int topColor;
     int bottomColor;
 };
@@ -78,6 +79,11 @@ float distance(int x1, int y1, int x2, int y2)
 bool compareWallDist(const wallType* first, const wallType* second)
 {
     return (first->distance > second->distance);
+}
+
+bool compareSectorDist(const sectorType& first, const sectorType& second)
+{
+    return (first.distance > second.distance);
 }
 
 void loadWallsv2()
@@ -136,6 +142,7 @@ void loadWallsv2()
             else if (numWallsExpected)
             {
                 numWalls = temp;
+                curSector.numWalls = numWalls;
                 wallCount = 0;
                 numWallsExpected = false;
             }
@@ -175,6 +182,7 @@ void loadWallsv2()
                     {
                         vertCount = 0;
                         colorExpected = true;
+                        curWall.distance = 0;
                         curSector.walls.push_back(curWall);
                         wallCount++;
                         if (wallCount >= numWalls)
@@ -183,6 +191,7 @@ void loadWallsv2()
                             topColorExpected = true;
                             bottomColorExpected = true;
                             sectorCount++;
+                            curSector.distance = 0;
                             sectors.push_back(curSector);
                             curSector.walls.clear();
                         }
@@ -447,64 +456,94 @@ void draw3D2()
     int wx[4], wy[4], wz[4];
     float sin = math.sin[player.r];
     float cos = math.cos[player.r];
+    float wallSum;
 
     //subtracting the player position, rotating the view, and dividing by the axis perpendicular to the player
     int x[4], y[4], z[4];
-    walls.sort(compareWallDist);
+    sectors.sort(compareSectorDist);
 
-    for (auto const& curWall : walls)
+    for (auto & curSector : sectors)
     {
-
-        for (int i = 0; i < 4; i++)
+        wallSum = 0.0f;
+        for (auto& curWall : curSector.walls)
         {
-            x[i] = curWall->verts[i].x - player.x;
-            y[i] = curWall->verts[i].y - player.y;
-            z[i] = curWall->verts[i].z - player.z;
+            for (int j = 0; j < 2; j++)     //looping through to draw the back side of the walls
+            {
+                for (int i = 0; i < 4; i++)
+                {
+                    x[i] = curWall.verts[i].x - player.x;
+                    y[i] = curWall.verts[i].y - player.y;
+                    z[i] = curWall.verts[i].z - player.z;
+                }
 
-            /*
-            *
-            * [ x1 ]  [ cos(theta) -sin(theta) ]
-            * [ y1 ]  [ sin(theta) cos(theta)  ]
-            *
-            * what these calculations are doing is matrix rotation around the player position based on the above matrix
-            */
-            wx[i] = x[i] * cos - y[i] * sin;
-            wy[i] = x[i] * sin + y[i] * cos;
-            wz[i] = z[i] + ((player.l * y[i]) / 32.0);
+                if (j == 0)      //swapping the x's to draw the back side of the walls
+                {
+                    int temp = x[1];
+                    x[1] = x[0];
+                    x[0] = temp;
+                    temp = y[1];
+                    y[1] = y[0];
+                    y[0] = temp;
+                    temp = x[3];
+                    x[3] = x[2];
+                    x[2] = temp;
+                    temp = y[3];
+                    y[3] = y[2];
+                    y[2] = temp;
+                }
+
+                for (int i = 0; i < 4; i++)
+                {
+                    /*
+                    *
+                    * [ x1 ]  [ cos(theta) -sin(theta) ]
+                    * [ y1 ]  [ sin(theta) cos(theta)  ]
+                    *
+                    * what these calculations are doing is matrix rotation around the player position based on the above matrix
+                    */
+                    wx[i] = x[i] * cos - y[i] * sin;
+                    wy[i] = x[i] * sin + y[i] * cos;
+                    wz[i] = z[i] + ((player.l * y[i]) / 32.0);
+                }
+
+                //I thought the parameters of the x and the y coordinates were in different positions but it is actually
+                //x1, y1, x2, y2
+                curWall.distance = distance(0, 0, (wx[1] + wx[0]) / 2, (wy[1] + wy[0]) / 2);
+                wallSum += curWall.distance;
+
+                //at this point we would probably continue if we had multiple walls to process
+                if (wy[0] < 1 && wy[1] < 1 && wy[2] < 1 && wy[3] < 1) { continue; }
+
+                if (wy[0] < 1)
+                {
+                    clipBehindPlayer(&wx[0], &wy[0], &wz[0], wx[1], wy[1], wz[1]);  //bottom line
+                    clipBehindPlayer(&wx[2], &wy[2], &wz[2], wx[3], wy[3], wz[3]);  //top line
+                }
+
+                if (wy[1] < 1)
+                {
+                    clipBehindPlayer(&wx[1], &wy[1], &wz[1], wx[0], wy[0], wz[0]);  //bottom line
+                    clipBehindPlayer(&wx[3], &wy[3], &wz[3], wx[2], wy[2], wz[2]);  //top line
+                }
+
+                // I believe that this is just using the standard calculation of projecting a 3d coordinate to the 2d screen
+                // d/z, since we are dividing by y coordinate is the depth in this code sample the denominator is y
+                // the d is the distance from the "camera" (as the youtube author states the field of view) to the screen thus
+                // we have 200/y mulitplying each coordinate
+                // https://math.stackexchange.com/questions/2305792/3d-projection-on-a-2d-plane-weak-maths-ressources
+                wx[0] = wx[0] * 200 / wy[0] + SW2;
+                wx[1] = wx[1] * 200 / wy[1] + SW2;
+                wx[2] = wx[2] * 200 / wy[2] + SW2;
+                wx[3] = wx[3] * 200 / wy[3] + SW2;
+                wy[0] = wz[0] * 200 / wy[0] + SH2;
+                wy[1] = wz[1] * 200 / wy[1] + SH2;
+                wy[2] = wz[2] * 200 / wy[2] + SH2;
+                wy[3] = wz[3] * 200 / wy[3] + SH2;
+
+                drawWall(wx[0], wx[1], wy[0], wy[1], wy[2], wy[3], curWall.color);
+            }
         }
-
-        curWall->distance = distance(0, (wx[1] + wx[0]) / 2, 0, (wy[1] + wy[0]) / 2);
-
-        //at this point we would probably continue if we had multiple walls to process
-        if (wy[0] < 1 && wy[1] < 1 && wy[2] < 1 && wy[3] < 1) { continue; }
-
-        if (wy[0] < 1)
-        {
-            clipBehindPlayer(&wx[0], &wy[0], &wz[0], wx[1], wy[1], wz[1]);  //bottom line
-            clipBehindPlayer(&wx[2], &wy[2], &wz[2], wx[3], wy[3], wz[3]);  //top line
-        }
-
-        if (wy[1] < 1)
-        {
-            clipBehindPlayer(&wx[1], &wy[1], &wz[1], wx[0], wy[0], wz[0]);  //bottom line
-            clipBehindPlayer(&wx[3], &wy[3], &wz[3], wx[2], wy[2], wz[2]);  //top line
-        }
-
-        // I believe that this is just using the standard calculation of projecting a 3d coordinate to the 2d screen
-        // d/z, since we are dividing by y coordinate is the depth in this code sample the denominator is y
-        // the d is the distance from the "camera" (as the youtube author states the field of view) to the screen thus
-        // we have 200/y mulitplying each coordinate
-        // https://math.stackexchange.com/questions/2305792/3d-projection-on-a-2d-plane-weak-maths-ressources
-        wx[0] = wx[0] * 200 / wy[0] + SW2;
-        wx[1] = wx[1] * 200 / wy[1] + SW2;
-        wx[2] = wx[2] * 200 / wy[2] + SW2;
-        wx[3] = wx[3] * 200 / wy[3] + SW2;
-        wy[0] = wz[0] * 200 / wy[0] + SH2;
-        wy[1] = wz[1] * 200 / wy[1] + SH2;
-        wy[2] = wz[2] * 200 / wy[2] + SH2;
-        wy[3] = wz[3] * 200 / wy[3] + SH2;
-
-        drawWall(wx[0], wx[1], wy[0], wy[1], wy[2], wy[3], curWall->color);
+        curSector.distance = wallSum / curSector.numWalls;
     }
 }
 
