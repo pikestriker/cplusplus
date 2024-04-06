@@ -55,6 +55,10 @@ struct wallType
 struct sectorType
 {
     std::list<wallType> walls;
+    int surfaceCoord[WIDTH];
+    int surface;
+    int zHigh;
+    int zLow;
     float distance;
     int numWalls;
     int topColor;
@@ -112,6 +116,8 @@ void loadWallsv2()
     int numWalls;
     int sectorCount;
     int wallCount;
+    int zHigh = 0;
+    int zLow = 0;
     sectorType curSector;
     wallType curWall;
     int temp;
@@ -175,6 +181,10 @@ void loadWallsv2()
                     break;
                 case 3:
                     curWall.verts[vertCount].z = temp;
+                    if (temp > zHigh)
+                        zHigh = temp;
+                    if (temp < zLow)
+                        zLow = temp;
                     vertCount++;
                     compCount = 0;
 
@@ -187,6 +197,10 @@ void loadWallsv2()
                         wallCount++;
                         if (wallCount >= numWalls)
                         {
+                            curSector.zHigh = zHigh;
+                            curSector.zLow = zLow;
+                            zHigh = 0;
+                            zLow = 0;
                             numWallsExpected = true;
                             topColorExpected = true;
                             bottomColorExpected = true;
@@ -352,7 +366,7 @@ void keyUp(unsigned char key, int x, int y)
     if (key == 'm') { keys.m = 0; }
     if (key == ',') { keys.sl = 0; }
     if (key == '.') { keys.sr = 0; }
-    if (key == 'l') { loadWalls(); }
+    if (key == 'l') { loadWalls(); loadWallsv2(); }
 }
 
 // pixel function that I learned from the 3DSage channel on youtube
@@ -388,7 +402,7 @@ void clearBackground()
     }
 }
 
-void drawWall(int x1, int x2, int b1, int b2, int t1, int t2, int color)
+void drawWall(int x1, int x2, int b1, int b2, int t1, int t2, int color, sectorType& curSector)
 {
     int dyb = b2 - b1;
     int dyt = t2 - t1;
@@ -399,25 +413,56 @@ void drawWall(int x1, int x2, int b1, int b2, int t1, int t2, int color)
 
     int xs = x1;
 
-    //clipping the actual pixels to the screen
+    //clipping the actual pixels to the screen in the X direction
     if (x1 < 1) { x1 = 1; }
     if (x2 < 1) { x2 = 1; }
     if (x1 > WIDTH - 1) { x1 = WIDTH - 1; }
     if (x2 > WIDTH - 1) { x2 = WIDTH - 1; }
 
+    //looping through from x1 to x2 (eg 40 - 50)
     for (int x = x1; x < x2; x++)
     {
+        //he is using the linear equation y = mx + b
+        //m = slope = rise over run = dyb / dx (difference in y bottom and difference in x)
+        //x = x - xs + 0.5 (current x value subtract the start of x and add .5 for rounding errors (according to the video))
+        //b = add your start y for the offset
+        //some examples y1 = 20 * (42 - 40 + 0.5) / 10 + 40 = 44
         int y1 = dyb * (x - xs + 0.5) / dx + b1;
         int y2 = dyt * (x - xs + 0.5) / dx + t1;
 
+        //clipping the pixels on the screen in the Y direction
         if (y1 < 1) { y1 = 1; }
         if (y2 < 1) { y2 = 1; }
         if (y1 > HEIGHT - 1) { y1 = HEIGHT - 1; }
         if (y2 > HEIGHT - 1) { y2 = HEIGHT - 1; }
 
+        if (curSector.surface == 1)
+        {
+            curSector.surfaceCoord[x] = y1;
+            continue;
+        }
+        else if (curSector.surface == 2)
+        {
+            curSector.surfaceCoord[x] = y2;
+            continue;
+        }
+        else if (curSector.surface == -1)
+        {
+            for (int y = curSector.surfaceCoord[x]; y < y1; y++)
+            {
+                pixel(x, y, curSector.topColor);
+            }
+        }
+        else if (curSector.surface == -2)
+        {
+            for (int y = y2; y < curSector.surfaceCoord[x]; y++)
+            {
+                pixel(x, y, curSector.bottomColor);
+            }
+        }
+        //from top to bottom draw a line
         for (int y = y1; y < y2; y++)
             pixel(x, y, color);
-        //pixel(x, y2, 0);
     }
 }
 
@@ -464,15 +509,21 @@ void draw3D2()
 
     for (auto & curSector : sectors)
     {
-        //real strange issue here, had to sort the walls or we would get this distored look with the further walls drawing on top of the
-        //forefront walls.  This only started happening after adding in the ability to draw the backs of the walls
-        curSector.walls.sort(compareWallDist);
-        wallSum = 0.0f;
-        for (auto& curWall : curSector.walls)
-        {
-            for (int j = 0; j < 2; j++)     //looping through to draw the back side of the walls
-            {
+        if (player.z < curSector.zLow)
+            curSector.surface = 1;
+        else if (player.z > curSector.zHigh)
+            curSector.surface = 2;
+        else
+            curSector.surface = 0;
 
+        for (int j = 0; j < 2; j++)     //looping through to draw the back side of the walls
+        {
+            //real strange issue here, had to sort the walls or we would get this distored look with the further walls drawing on top of the
+            //forefront walls.  This only started happening after adding in the ability to draw the backs of the walls
+            //curSector.walls.sort(compareWallDist);
+            wallSum = 0.0f;
+            for (auto& curWall : curSector.walls)
+            {
                 for (int i = 0; i < 4; i++)
                 {
                     x[i] = curWall.verts[i].x - player.x;
@@ -545,10 +596,11 @@ void draw3D2()
                 wy[2] = wz[2] * 200 / wy[2] + SH2;
                 wy[3] = wz[3] * 200 / wy[3] + SH2;
 
-                drawWall(wx[0], wx[1], wy[0], wy[1], wy[2], wy[3], curWall.color);
+                drawWall(wx[0], wx[1], wy[0], wy[1], wy[2], wy[3], curWall.color, curSector);
             }
+            curSector.distance = wallSum / curSector.numWalls;
+            curSector.surface *= -1;
         }
-        curSector.distance = wallSum / curSector.numWalls;
     }
 }
 
@@ -615,7 +667,8 @@ void draw3D()
     //if (wx[1] > 0 && wx[1] < WIDTH && wy[1] > 0 && wy[1] < HEIGHT)
     //    pixel(wx[1], wy[1], 0);
 
-    drawWall(wx[0], wx[1], wy[0], wy[1], wy[2], wy[3], 0);
+    sectorType dummySector;
+    drawWall(wx[0], wx[1], wy[0], wy[1], wy[2], wy[3], 0, dummySector);
 }
 
 // Display_Objects() function    
