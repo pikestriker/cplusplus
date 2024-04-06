@@ -219,87 +219,16 @@ void loadWallsv2()
     }
 }
 
-void loadWalls()
-{
-    if (!walls.empty())
-    {
-        for (auto const& wallToDelete : walls)
-        {
-            delete wallToDelete;
-        }
-
-        walls.clear();
-    }
-    std::ifstream wallFile;
-    std::string line;
-    int vertCount = 0;
-    int compCount = 0;
-    bool colorExpected = true;
-    wallType* curWall = NULL;
-    int temp;
-    wallFile.open("walls.txt");
-
-    if (wallFile.is_open())
-    {
-        while (wallFile.good())
-        {
-            wallFile >> temp;
-
-            if (colorExpected)
-            {
-                colorExpected = false;
-                if (curWall)
-                    walls.push_back(curWall);
-
-                curWall = new wallType();
-                curWall->color = temp;
-                vertCount = 0;
-            }
-            else
-            {
-                compCount++;
-
-                switch (compCount)
-                {
-                case 1:
-                    curWall->verts[vertCount].x = temp;
-                    break;
-                case 2:
-                    curWall->verts[vertCount].y = temp;
-                    break;
-                case 3:
-                    curWall->verts[vertCount].z = temp;
-                    vertCount++;
-                    compCount = 0;
-
-                    if (vertCount == 4)
-                    {
-                        vertCount = 0;
-                        colorExpected = true;
-                    }
-
-                    break;
-                }
-            }
-        }
-
-        if (curWall)
-            walls.push_back(curWall);
-
-        wallFile.close();
-    }
-}
 // Init_OpenGL() function    
 void Init_OpenGL()
 {
     // set background color to Black    
     glClearColor(0.0, 0.24, 0.51, 0.0);
-    // set shade model to Flat    
-    //glShadeModel(GL_FLAT);
+
     lastTickCount = glutGet(GLUT_ELAPSED_TIME);
     startTime = lastTickCount;
     glPointSize(PIXEL_SCALE);
-    //gluOrtho2D(0, 0, WIDTH, HEIGHT);
+ 
     //THIS IS IMPORTANT, THE LINE ABOVE WAS INCORRECT ORDER
     gluOrtho2D(0, GLSW, 0, GLSH);
     frameCount = 0;
@@ -317,7 +246,6 @@ void Init_OpenGL()
     player.r = 0;
     player.l = 0;
 
-    loadWalls();
     loadWallsv2();
 }
 
@@ -366,7 +294,7 @@ void keyUp(unsigned char key, int x, int y)
     if (key == 'm') { keys.m = 0; }
     if (key == ',') { keys.sl = 0; }
     if (key == '.') { keys.sr = 0; }
-    if (key == 'l') { loadWalls(); loadWallsv2(); }
+    if (key == 'l') { loadWallsv2(); }
 }
 
 // pixel function that I learned from the 3DSage channel on youtube
@@ -604,73 +532,6 @@ void draw3D2()
     }
 }
 
-void draw3D()
-{
-    //world coordinates of a four point wall
-    int wx[4], wy[4], wz[4];
-    float sin = math.sin[player.r];
-    float cos = math.cos[player.r];
-
-    //subtracting the player position, rotating the view, and dividing by the axis perpendicular to the player
-    int x[4], y[4], z[4];
-    int x1 = 40 - player.x;
-    int x2 = 40 - player.x;
-    int y1 = 10 - player.y;
-    int y2 = 290 - player.y;
-
-    wx[0] = x1 * cos - y1 * sin;
-    wx[1] = x2 * cos - y2 * sin;
-    wx[2] = wx[0];
-    wx[3] = wx[1];
-
-    wy[0] = x1 * sin + y1 * cos;
-    wy[1] = x2 * sin + y2 * cos;
-    wy[2] = wy[0];
-    wy[3] = wy[1];                  // tried to add 50 here to the wall but I think it only deals with straight lines
-
-    //discuss these calculations
-    wz[0] = 0 - player.z + ((player.l * wy[0]) / 32.0);
-    wz[1] = 0 - player.z + ((player.l * wy[1]) / 32.0);
-    wz[2] = wz[0] + 40;
-    wz[3] = wz[1] + 40;             // the z can handle angled walls
-
-    if (wy[0] < 1 && wy[1] < 1) { return; }
-
-    if (wy[0] < 1)
-    {
-        clipBehindPlayer(&wx[0], &wy[0], &wz[0], wx[1], wy[1], wz[1]);  //bottom line
-        clipBehindPlayer(&wx[2], &wy[2], &wz[2], wx[3], wy[3], wz[3]);  //top line
-    }
-
-    if (wy[1] < 1)
-    {
-        clipBehindPlayer(&wx[1], &wy[1], &wz[1], wx[0], wy[0], wz[0]);  //bottom line
-        clipBehindPlayer(&wx[3], &wy[3], &wz[3], wx[2], wy[2], wz[2]);  //top line
-    }
-
-    // I believe that this is just using the standard calculation of projecting a 3d coordinate to the 2d screen
-    // d/z, since we are dividing by y coordinate is the depth in this code sample the denominator is y
-    // the d is the distance from the "camera" (as the youtube author states the field of view) to the screen thus
-    // we have 200/y mulitplying each coordinate
-    // https://math.stackexchange.com/questions/2305792/3d-projection-on-a-2d-plane-weak-maths-ressources
-    wx[0] = wx[0] * 200 / wy[0] + SW2;
-    wx[1] = wx[1] * 200 / wy[1] + SW2;
-    wx[2] = wx[2] * 200 / wy[2] + SW2;
-    wx[3] = wx[3] * 200 / wy[3] + SW2;
-    wy[0] = wz[0] * 200 / wy[0] + SH2;
-    wy[1] = wz[1] * 200 / wy[1] + SH2;
-    wy[2] = wz[2] * 200 / wy[2] + SH2;
-    wy[3] = wz[3] * 200 / wy[3] + SH2;
-
-    //if (wx[0] > 0 && wx[0] < WIDTH && wy[0] > 0 && wy[0] < HEIGHT)
-    //    pixel(wx[0], wy[0], 0);
-    //if (wx[1] > 0 && wx[1] < WIDTH && wy[1] > 0 && wy[1] < HEIGHT)
-    //    pixel(wx[1], wy[1], 0);
-
-    sectorType dummySector;
-    drawWall(wx[0], wx[1], wy[0], wy[1], wy[2], wy[3], 0, dummySector);
-}
-
 // Display_Objects() function    
 void Display_Objects(void)
 {
@@ -692,13 +553,8 @@ void Display_Objects(void)
 
         std::string strFrameCount = ssFrameCount.str();
         glClear(GL_COLOR_BUFFER_BIT);
-        //clearBackground();
+        
         draw3D2();
-
-        // this really just looks like it is drawing only a single pixel
-        //for (int i = 0; i < WIDTH / 2; i++)
-        //    for (int j = 0; j < HEIGHT / 2; j++)
-        //        pixel(0 + i, 0 + j, 0);
 
         //just outputting the fps
         glRasterPos2i(0, GLSH - 25);
